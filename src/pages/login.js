@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 
 function LoginPage({ onLoginSuccess }) {
@@ -7,6 +7,23 @@ function LoginPage({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const testBackendConnection = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/test`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      console.log('Test response:', data);
+    } catch (error) {
+      console.error('Test error:', error);
+    }
+  };
+
+  useEffect(() => {
+    testBackendConnection();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,6 +35,8 @@ function LoginPage({ onLoginSuccess }) {
     setIsLoading(true);
     try {
       const endpoint = isRegistering ? 'register' : 'login';
+      console.log(`Sending ${isRegistering ? 'registration' : 'login'} request to: ${API_BASE_URL}/${endpoint}`);
+      
       const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: {
@@ -26,11 +45,27 @@ function LoginPage({ onLoginSuccess }) {
         body: JSON.stringify({ username, password }),
         credentials: 'include',
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'An error occurred');
-      onLoginSuccess(data.user_id);
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'An error occurred');
+        onLoginSuccess(data.user_id);
+      } else {
+        const text = await response.text();
+        console.error('Received non-JSON response:', text);
+        throw new Error('Received non-JSON response from server');
+      }
     } catch (error) {
-      setError(error.message);
+      console.error('Full error object:', error);
+      if (error instanceof TypeError) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(error.message || 'An unexpected error occurred');
+      }
       console.error(isRegistering ? 'Registration error:' : 'Login error:', error);
     } finally {
       setIsLoading(false);
